@@ -204,7 +204,7 @@ class MoveGameEngine {
             let pHeight = this.player.height;
             let pY = this.player.y;
 
-            if (this.player.isSliding) {
+            if (this.player.isSliding || this.player.isCrouching) {
                 pHeight = this.player.height / 2;
                 pY = this.player.y + this.player.height / 2;
             }

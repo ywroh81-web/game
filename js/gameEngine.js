@@ -107,14 +107,8 @@ class GameEngine {
       targetX = (this.canvas.width * 3 / 4) - (this.player.width / 2); // Right Lane
     }
 
-    // 부드러운 이동 (Lerp) - Smooth Movement
-    // this.player.x = targetX; // Old Snap
-    this.player.x += (targetX - this.player.x) * 0.1; // Lerp factor 0.1
-
-    // Threshold cleanup to prevent infinite micro-movement
-    if (Math.abs(targetX - this.player.x) < 0.5) {
-      this.player.x = targetX;
-    }
+    // 3개 레인으로 즉시 이동 (Snap) - User Request
+    this.player.x = targetX;
 
     // 화면 밖으로 나가지 않도록 제한 (혹시 모를 오차 방지)
     if (this.player.x < 0) this.player.x = 0;
