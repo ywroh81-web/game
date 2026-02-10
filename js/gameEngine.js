@@ -102,9 +102,8 @@ class GameEngine {
       targetX = (this.canvas.width * 3 / 4) - (this.player.width / 2); // Right Lane
     }
 
-    // 부드러운 이동 (Lerp)
-    // 현재 위치에서 타겟 위치로 10%씩 접근
-    this.player.x += (targetX - this.player.x) * 0.1;
+    // 부드러운 이동 (Lerp) 대신 즉시 이동 (Snap)
+    this.player.x = targetX;
 
     // 화면 밖으로 나가지 않도록 제한 (혹시 모를 오차 방지)
     if (this.player.x < 0) this.player.x = 0;
@@ -115,28 +114,12 @@ class GameEngine {
     // 2. 미사일 이동
     for (let i = this.missiles.length - 1; i >= 0; i--) {
       const m = this.missiles[i];
-      // 타겟 위치로 이동 (유도탄 방식 또는 직선 이동)
-      // 여기서는 클릭한 지점(rx, ry)을 향해 날아가게 하거나, 단순히 위로 날아가게 할 수 있음
-      // 규칙상 "마우스 클릭 위치로 미사일이 날아가도록" 하라고 되어 있음.
 
-      const dx = m.targetX - m.x;
-      const dy = m.targetY - m.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      // 정면 발사 (직선 이동)
+      m.y -= m.speed;
 
-      if (dist < m.speed) {
-        // 목표 도달 (또는 근처) -> 폭발 혹은 소멸
-        this.missiles.splice(i, 1);
-        continue;
-      }
-
-      const vx = (dx / dist) * m.speed;
-      const vy = (dy / dist) * m.speed;
-
-      m.x += vx;
-      m.y += vy;
-
-      // 화면 밖 체크 (혹시 모르니)
-      if (m.y < 0 || m.x < 0 || m.x > this.canvas.width || m.y > this.canvas.height) {
+      // 화면 밖 체크
+      if (m.y < 0) {
         this.missiles.splice(i, 1);
       }
     }
@@ -273,12 +256,13 @@ class GameEngine {
     }
 
     // 3. 미사일 그리기
-    this.ctx.fillStyle = 'red';
+    this.ctx.fillStyle = '#ff0000'; // Red Laser
+    this.ctx.shadowBlur = 5;
+    this.ctx.shadowColor = 'red';
     for (const m of this.missiles) {
-      this.ctx.beginPath();
-      this.ctx.arc(m.x, m.y, 4, 0, Math.PI * 2);
-      this.ctx.fill();
+      this.ctx.fillRect(m.x - 2, m.y, 4, 15); // 길쭉한 레이저
     }
+    this.ctx.shadowBlur = 0;
 
     // 4. 게임 오버 텍스트 (게임이 끝났지만 루프가 돌 수 있음, stop 호출 전)
     if (!this.isGameActive) {
@@ -301,11 +285,19 @@ class GameEngine {
   }
 
   spawnEnemy() {
-    const x = Math.random() * (this.canvas.width - 30);
+    // 3개 차선 중 하나 랜덤 선택
+    const lanes = [
+      this.canvas.width / 4,       // Left
+      this.canvas.width / 2,       // Center
+      this.canvas.width * 3 / 4    // Right
+    ];
+    const laneX = lanes[Math.floor(Math.random() * lanes.length)];
+
     const type = Math.random() > 0.8 ? 'ufo' : 'meteor'; // 20% 확률로 UFO
+    const width = 30; // 적 너비
 
     const enemy = {
-      x: x,
+      x: laneX - width / 2, // 차선 중앙에 정렬
       y: -30,
       width: 30,
       height: 30,
@@ -318,18 +310,16 @@ class GameEngine {
     this.enemies.push(enemy);
   }
 
-  fireMissile(targetX, targetY) {
+  fireMissile() {
     if (!this.isGameActive) return;
 
-    // 플레이어 위치에서 발사
+    // 플레이어 위치에서 정면으로 발사
     this.missiles.push({
       x: this.player.x + this.player.width / 2,
       y: this.player.y,
-      targetX: targetX,
-      targetY: targetY,
-      speed: 8,
+      speed: 10,  // 속도 약간 증가
       width: 5,
-      height: 5
+      height: 10   // 길쭉한 레이저 형태
     });
   }
 
