@@ -47,11 +47,11 @@ class GameEngine {
   start(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
-    
+
     this.resetGame();
     this.isGameActive = true;
     this.lastTime = performance.now();
-    
+
     // 플레이어 초기 위치 (화면 하단 중앙)
     this.player.x = this.canvas.width / 2 - this.player.width / 2;
     this.player.y = this.canvas.height - this.player.height - 20;
@@ -66,7 +66,7 @@ class GameEngine {
     this.missiles = [];
     this.enemies = [];
     this.enemySpawnInterval = 2000;
-    
+
     if (this.onScoreChange) this.onScoreChange(this.score, this.level);
     if (this.onHpChange) this.onHpChange(this.player.hp);
   }
@@ -88,14 +88,25 @@ class GameEngine {
     const deltaTime = timestamp - this.lastTime;
     this.lastTime = timestamp;
 
-    // 1. 플레이어 이동 처리 (Pose 기반)
-    if (this.currentPose === "Left") {
-      this.player.x -= this.player.speed;
-    } else if (this.currentPose === "Right") {
-      this.player.x += this.player.speed;
+    // 1. 플레이어 이동 처리 (Pose 기반 - 위치 고정 방식)
+    let targetX = this.canvas.width / 2 - this.player.width / 2; // 기본: 중앙 (정면/Center)
+
+    // 한국어 라벨("왼쪽", "오른쪽") 및 영어 라벨("Left", "Right") 모두 지원
+    // 또한 사용자가 "고개를 기울이는 쪽"으로 움직이길 원하므로,
+    // 기본적으로 Left -> Left Lane, Right -> Right Lane으로 설정합니다.
+    // (웹캠이 flip: true 이므로, 거울처럼 내 왼쪽 = 화면 왼쪽일 것임)
+
+    if (this.currentPose === "Left" || this.currentPose === "왼쪽") {
+      targetX = (this.canvas.width / 4) - (this.player.width / 2); // Left Lane
+    } else if (this.currentPose === "Right" || this.currentPose === "오른쪽") {
+      targetX = (this.canvas.width * 3 / 4) - (this.player.width / 2); // Right Lane
     }
 
-    // 화면 밖으로 나가지 않도록 제한
+    // 부드러운 이동 (Lerp)
+    // 현재 위치에서 타겟 위치로 10%씩 접근
+    this.player.x += (targetX - this.player.x) * 0.1;
+
+    // 화면 밖으로 나가지 않도록 제한 (혹시 모를 오차 방지)
     if (this.player.x < 0) this.player.x = 0;
     if (this.player.x + this.player.width > this.canvas.width) {
       this.player.x = this.canvas.width - this.player.width;
@@ -107,11 +118,11 @@ class GameEngine {
       // 타겟 위치로 이동 (유도탄 방식 또는 직선 이동)
       // 여기서는 클릭한 지점(rx, ry)을 향해 날아가게 하거나, 단순히 위로 날아가게 할 수 있음
       // 규칙상 "마우스 클릭 위치로 미사일이 날아가도록" 하라고 되어 있음.
-      
+
       const dx = m.targetX - m.x;
       const dy = m.targetY - m.y;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
       if (dist < m.speed) {
         // 목표 도달 (또는 근처) -> 폭발 혹은 소멸
         this.missiles.splice(i, 1);
@@ -126,7 +137,7 @@ class GameEngine {
 
       // 화면 밖 체크 (혹시 모르니)
       if (m.y < 0 || m.x < 0 || m.x > this.canvas.width || m.y > this.canvas.height) {
-         this.missiles.splice(i, 1);
+        this.missiles.splice(i, 1);
       }
     }
 
@@ -175,22 +186,72 @@ class GameEngine {
     }
   }
 
+  // ... (draw function, etc) ...
+
+  // 1. 플레이어 이동 처리 (Pose 기반 - 위치 고정 방식)에서 사용되는 update() 메서드 내의 로직 수정 필요
+  // update() 메서드는 위쪽에 있으니 거기를 수정해야 함.
+
+  // (이전 툴 호출에서 update 메서드의 해당 부분을 수정하려고 했는데, line number가 안 맞을 수 있음.
+  // 다시 update 메서드 전체를 보거나 해당 블록을 찾아야 함.)
+
   /**
    * 화면 그리기 (Render Loop)
    */
   draw() {
     if (!this.ctx) return;
-    
+
     // 배경 지우기
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // 1. 플레이어 그리기 (삼각형 모양)
-    this.ctx.fillStyle = this.player.color;
+    // 1. 플레이어 그리기 (Cool Airplane)
+    const px = this.player.x;
+    const py = this.player.y;
+    const w = this.player.width;
+    const h = this.player.height;
+
+    this.ctx.save();
+    this.ctx.translate(px + w / 2, py + h / 2); // 중심점으로 이동
+
+    // Body Gradient
+    const grad = this.ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
+    grad.addColorStop(0, '#00d2ff');
+    grad.addColorStop(0.5, '#3a7bd5');
+    grad.addColorStop(1, '#00d2ff');
+
+    // Main Body (Fuselage)
+    this.ctx.fillStyle = grad;
     this.ctx.beginPath();
-    this.ctx.moveTo(this.player.x + this.player.width / 2, this.player.y);
-    this.ctx.lineTo(this.player.x + this.player.width, this.player.y + this.player.height);
-    this.ctx.lineTo(this.player.x, this.player.y + this.player.height);
+    this.ctx.moveTo(0, -h / 2); // Nose
+    this.ctx.lineTo(w / 4, h / 4);
+    this.ctx.lineTo(0, h / 2);  // Tail center
+    this.ctx.lineTo(-w / 4, h / 4);
+    this.ctx.closePath();
     this.ctx.fill();
+
+    // Wings
+    this.ctx.fillStyle = '#22a6b3';
+    this.ctx.beginPath();
+    this.ctx.moveTo(0, -h / 4);
+    this.ctx.lineTo(w / 2, h / 4);
+    this.ctx.lineTo(w / 4, h / 2);
+    this.ctx.lineTo(0, h / 4); // Wing connect
+    this.ctx.lineTo(-w / 4, h / 2);
+    this.ctx.lineTo(-w / 2, h / 4);
+    this.ctx.lineTo(0, -h / 4);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    // Cockpit
+    this.ctx.fillStyle = '#ff9f43';
+    this.ctx.beginPath();
+    this.ctx.ellipse(0, -h / 6, w / 8, h / 8, 0, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // Engine Glow
+    this.ctx.shadowBlur = 10;
+    this.ctx.shadowColor = '#00d2ff';
+
+    this.ctx.restore();
 
     // 2. 적 그리기
     for (const e of this.enemies) {
@@ -198,16 +259,16 @@ class GameEngine {
       if (e.type === 'meteor') {
         // 운석 (원형)
         this.ctx.beginPath();
-        this.ctx.arc(e.x + e.width/2, e.y + e.height/2, e.width/2, 0, Math.PI * 2);
+        this.ctx.arc(e.x + e.width / 2, e.y + e.height / 2, e.width / 2, 0, Math.PI * 2);
         this.ctx.fill();
-        this.ctx.fillText("🪨", e.x, e.y + e.height/2);
+        this.ctx.fillText("🪨", e.x, e.y + e.height / 2);
       } else {
         // UFO (타원형)
         this.ctx.beginPath();
-        this.ctx.ellipse(e.x + e.width/2, e.y + e.height/2, e.width/2, e.height/3, 0, 0, Math.PI * 2);
+        this.ctx.ellipse(e.x + e.width / 2, e.y + e.height / 2, e.width / 2, e.height / 3, 0, 0, Math.PI * 2);
         this.ctx.fill();
         this.ctx.fillStyle = 'white';
-        this.ctx.fillText("🛸", e.x + 5, e.y + e.height/2 + 5);
+        this.ctx.fillText("🛸", e.x + 5, e.y + e.height / 2 + 5);
       }
     }
 
@@ -215,22 +276,34 @@ class GameEngine {
     this.ctx.fillStyle = 'red';
     for (const m of this.missiles) {
       this.ctx.beginPath();
-      this.ctx.arc(m.x, m.y, 4, 0, Math.PI*2);
+      this.ctx.arc(m.x, m.y, 4, 0, Math.PI * 2);
       this.ctx.fill();
     }
-    
+
     // 4. 게임 오버 텍스트 (게임이 끝났지만 루프가 돌 수 있음, stop 호출 전)
     if (!this.isGameActive) {
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+      this.ctx.fillStyle = '#ff3333';
+      this.ctx.font = 'bold 48px Arial';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText("GAME OVER", this.canvas.width / 2, this.canvas.height / 2);
+
       this.ctx.fillStyle = 'white';
-      this.ctx.font = '30px Arial';
-      this.ctx.fillText("GAME OVER", this.canvas.width/2 - 80, this.canvas.height/2);
+      this.ctx.font = '24px Arial';
+      this.ctx.fillText(`Final Score: ${this.score}`, this.canvas.width / 2, this.canvas.height / 2 + 50);
+
+      this.ctx.fillStyle = '#aaaaaa';
+      this.ctx.font = '16px Arial';
+      this.ctx.fillText("Press Start to Retry", this.canvas.width / 2, this.canvas.height / 2 + 90);
     }
   }
 
   spawnEnemy() {
     const x = Math.random() * (this.canvas.width - 30);
     const type = Math.random() > 0.8 ? 'ufo' : 'meteor'; // 20% 확률로 UFO
-    
+
     const enemy = {
       x: x,
       y: -30,
@@ -241,13 +314,13 @@ class GameEngine {
       color: type === 'ufo' ? 'purple' : 'gray',
       scoreValue: type === 'ufo' ? 20 : 10
     };
-    
+
     this.enemies.push(enemy);
   }
 
   fireMissile(targetX, targetY) {
     if (!this.isGameActive) return;
-    
+
     // 플레이어 위치에서 발사
     this.missiles.push({
       x: this.player.x + this.player.width / 2,
@@ -280,7 +353,7 @@ class GameEngine {
 
   addScore(points) {
     this.score += points;
-    
+
     // 레벨업 (100점 단위)
     if (Math.floor(this.score / 100) + 1 > this.level) {
       this.level++;
@@ -293,7 +366,7 @@ class GameEngine {
   }
 
   // --- 외부 입력 핸들러 ---
-  
+
   onPoseDetected(poseName) {
     // "Left", "Right", "Center" 등
     this.currentPose = poseName;
@@ -302,7 +375,7 @@ class GameEngine {
   setScoreChangeCallback(callback) {
     this.onScoreChange = callback;
   }
-  
+
   setHpChangeCallback(callback) {
     this.onHpChange = callback;
   }

@@ -11,6 +11,7 @@ let gameEngine;
 let stabilizer;
 let ctx;
 let labelContainer;
+let canvas;
 
 /**
  * 애플리케이션 초기화
@@ -35,13 +36,14 @@ async function init() {
       smoothingFrames: 3
     });
 
-    // 3. GameEngine 초기화 (선택적)
+    // 3. GameEngine 초기화
     gameEngine = new GameEngine();
 
     // 4. 캔버스 설정
-    const canvas = document.getElementById("canvas");
-    canvas.width = 200;
-    canvas.height = 200;
+    canvas = document.getElementById("canvas");
+    // 캔버스 크기를 좀 더 크게 설정 (게임 플레이 용이성)
+    canvas.width = 600;
+    canvas.height = 400;
     ctx = canvas.getContext("2d");
 
     // 5. Label Container 설정
@@ -53,10 +55,49 @@ async function init() {
 
     // 6. PoseEngine 콜백 설정
     poseEngine.setPredictionCallback(handlePrediction);
-    poseEngine.setDrawCallback(drawPose);
 
-    // 7. PoseEngine 시작
+    // 7. 게임 콜백 설정
+    gameEngine.setScoreChangeCallback((score, level) => {
+      const scoreBoard = document.getElementById("score-board");
+      if (scoreBoard) {
+        scoreBoard.innerText = `Score: ${score} / Level: ${level}`;
+      }
+    });
+
+    gameEngine.setHpChangeCallback((hp) => {
+      const hpBoard = document.getElementById("hp-board");
+      if (hpBoard) {
+        let hearts = "";
+        for (let i = 0; i < hp; i++) hearts += "❤️";
+        hpBoard.innerText = `HP: ${hearts}`;
+      }
+    });
+
+    gameEngine.setGameEndCallback((score, level) => {
+      // alert 제거: 캔버스에 Game Over 텍스트가 그려지도록 함
+      stop();
+    });
+
+    // 8. 마우스 클릭 이벤트 (미사일 발사)
+    canvas.addEventListener('mousedown', (e) => {
+      if (gameEngine && gameEngine.isGameActive) {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        gameEngine.fireMissile(x, y);
+      }
+    });
+
+    // 9. 루프 시작
+    // 이전 루프 취소 (중복 실행 방지)
+    if (animationId) cancelAnimationFrame(animationId);
+    requestAnimationFrame(gameLoop);
+
+    // 10. PoseEngine 시작
     poseEngine.start();
+
+    // 11. 게임 시작
+    gameEngine.start(canvas);
 
     stopBtn.disabled = false;
   } catch (error) {
@@ -65,6 +106,44 @@ async function init() {
     startBtn.disabled = false;
   }
 }
+
+let animationId;
+
+/**
+ * 메인 게임 루프
+ */
+function gameLoop(timestamp) {
+  // 게임이 실행 중이면 업데이트
+  if (gameEngine && gameEngine.isGameActive) {
+    gameEngine.update(timestamp);
+  }
+
+  // 그리기 (Game Active 여부와 상관없이 그리기 - Game Over 화면 표시용)
+  if (gameEngine) {
+    gameEngine.draw();
+  }
+
+  // 웹캠 오버레이 (게임 중에는 작게, 대기 중에는 크게)
+  if (poseEngine && poseEngine.webcam && poseEngine.webcam.canvas) {
+    if (gameEngine && gameEngine.isGameActive) {
+      // 게임 중: 우측 하단 작게
+      const camSize = 100;
+      ctx.globalAlpha = 0.7;
+      ctx.drawImage(poseEngine.webcam.canvas, canvas.width - camSize, canvas.height - camSize, camSize, camSize);
+      ctx.globalAlpha = 1.0;
+    } else {
+      // 게임이 멈췄지만 Game Over 화면이 떠있을 수 있음.
+      // Game Over 상태가 아니면(즉, init 전이거나 완전히 리셋된 상태면) 크게 그리기?
+      // 하지만 지금 구조상 init() 호출 전에는 gameEngine이 null이거나, stop() 후에는 gameEngine이 존재하지만 isGameActive=false임.
+      // 사용자가 "중단했을 때도 GAME OVER"를 보고 싶어하므로,
+      // stop() 후에는 gameEngine.draw()가 Game Over를 그리고, 웹캠은 작게 유지하거나 숨기는 게 나을 듯.
+      // 여기서는 게임 오버 텍스트가 가려지지 않도록 웹캠을 작게 유지하거나 아예 안 그리도록 함.
+    }
+  }
+
+  animationId = window.requestAnimationFrame(gameLoop);
+}
+
 
 /**
  * 애플리케이션 중지
@@ -77,8 +156,8 @@ function stop() {
     poseEngine.stop();
   }
 
-  if (gameEngine && gameEngine.isGameActive) {
-    gameEngine.stop();
+  if (gameEngine) {
+    gameEngine.stop(); // sets isGameActive = false
   }
 
   if (stabilizer) {
@@ -109,50 +188,12 @@ function handlePrediction(predictions, pose) {
   const maxPredictionDiv = document.getElementById("max-prediction");
   maxPredictionDiv.innerHTML = stabilized.className || "감지 중...";
 
-  // 4. GameEngine에 포즈 전달 (게임 모드일 경우)
+  // 4. GameEngine에 포즈 전달
   if (gameEngine && gameEngine.isGameActive && stabilized.className) {
     gameEngine.onPoseDetected(stabilized.className);
   }
 }
 
-/**
- * 포즈 그리기 콜백
- * @param {Object} pose - PoseNet 포즈 데이터
- */
-function drawPose(pose) {
-  if (poseEngine.webcam && poseEngine.webcam.canvas) {
-    ctx.drawImage(poseEngine.webcam.canvas, 0, 0);
+// drawPose 함수는 이제 gameLoop 내에서 직접 처리하거나 제거
+// (여기서는 제거하고 gameLoop에서 오버레이 처리함)
 
-    // 키포인트와 스켈레톤 그리기
-    if (pose) {
-      const minPartConfidence = 0.5;
-      tmPose.drawKeypoints(pose.keypoints, minPartConfidence, ctx);
-      tmPose.drawSkeleton(pose.keypoints, minPartConfidence, ctx);
-    }
-  }
-}
-
-// 게임 모드 시작 함수 (선택적 - 향후 확장용)
-function startGameMode(config) {
-  if (!gameEngine) {
-    console.warn("GameEngine이 초기화되지 않았습니다.");
-    return;
-  }
-
-  gameEngine.setCommandChangeCallback((command) => {
-    console.log("새로운 명령:", command);
-    // UI 업데이트 로직 추가 가능
-  });
-
-  gameEngine.setScoreChangeCallback((score, level) => {
-    console.log(`점수: ${score}, 레벨: ${level}`);
-    // UI 업데이트 로직 추가 가능
-  });
-
-  gameEngine.setGameEndCallback((finalScore, finalLevel) => {
-    console.log(`게임 종료! 최종 점수: ${finalScore}, 최종 레벨: ${finalLevel}`);
-    alert(`게임 종료!\n최종 점수: ${finalScore}\n최종 레벨: ${finalLevel}`);
-  });
-
-  gameEngine.start(config);
-}
