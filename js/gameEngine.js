@@ -107,8 +107,14 @@ class GameEngine {
       targetX = (this.canvas.width * 3 / 4) - (this.player.width / 2); // Right Lane
     }
 
-    // 부드러운 이동 (Lerp) 대신 즉시 이동 (Snap)
-    this.player.x = targetX;
+    // 부드러운 이동 (Lerp) - Smooth Movement
+    // this.player.x = targetX; // Old Snap
+    this.player.x += (targetX - this.player.x) * 0.1; // Lerp factor 0.1
+
+    // Threshold cleanup to prevent infinite micro-movement
+    if (Math.abs(targetX - this.player.x) < 0.5) {
+      this.player.x = targetX;
+    }
 
     // 화면 밖으로 나가지 않도록 제한 (혹시 모를 오차 방지)
     if (this.player.x < 0) this.player.x = 0;
@@ -177,6 +183,18 @@ class GameEngine {
       }
     }
 
+    // 5. 입자(이펙트) 업데이트
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.alpha -= 0.02; // Fade out
+
+      if (p.alpha <= 0) {
+        this.particles.splice(i, 1);
+      }
+    }
+
     // 5. 미사일과 적의 충돌 체크
     for (let mIndex = this.missiles.length - 1; mIndex >= 0; mIndex--) {
       for (let eIndex = this.enemies.length - 1; eIndex >= 0; eIndex--) {
@@ -190,6 +208,7 @@ class GameEngine {
             this.enemies.splice(eIndex, 1);
             this.missiles.splice(mIndex, 1);
             this.takeDamage(); // 벌칙
+            this.createExplosion(e.x + e.width / 2, e.y + e.height / 2, 'orange'); // 폭발 이펙트
             break;
           }
 
@@ -197,6 +216,9 @@ class GameEngine {
           this.enemies.splice(eIndex, 1);
           this.missiles.splice(mIndex, 1);
           this.addScore(e.scoreValue);
+
+          // 폭발 이펙트 생성
+          this.createExplosion(e.x + e.width / 2, e.y + e.height / 2, e.color);
 
           // 아이템 드롭 (10%)
           if (Math.random() < 0.1) {
@@ -306,6 +328,16 @@ class GameEngine {
       }
     }
 
+    // 2-2. 입자 그리기
+    for (const p of this.particles) {
+      this.ctx.globalAlpha = p.alpha;
+      this.ctx.fillStyle = p.color;
+      this.ctx.beginPath();
+      this.ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.globalAlpha = 1.0;
+    }
+
     // 3. 미사일 그리기
     this.ctx.fillStyle = '#ff0000'; // Red Laser
     this.ctx.shadowBlur = 5;
@@ -380,6 +412,20 @@ class GameEngine {
       width: 30, height: 30,
       type: type
     });
+  }
+
+  createExplosion(x, y, color) {
+    for (let i = 0; i < 15; i++) {
+      this.particles.push({
+        x: x,
+        y: y,
+        vx: (Math.random() - 0.5) * 10,
+        vy: (Math.random() - 0.5) * 10,
+        radius: Math.random() * 5 + 2,
+        color: color,
+        alpha: 1.0
+      });
+    }
   }
 
   fireMissile() {

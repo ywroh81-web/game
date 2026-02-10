@@ -73,6 +73,7 @@ function stopGame() {
 
 function gameLoop() {
     if (aimEngine && aimEngine.isGameActive) {
+        aimEngine.update();
         aimEngine.draw();
         animationId = requestAnimationFrame(gameLoop);
     } else {
