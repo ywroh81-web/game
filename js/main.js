@@ -100,29 +100,39 @@ async function init() {
   }
 }
 
-function startGame() {
+// 변경: startGame을 async로 만들어 웹캠 재생 완료를 기다림
+async function startGame() {
   const startBtn = document.getElementById("startBtn");
   const stopBtn = document.getElementById("stopBtn");
 
-  // 9. 루프 시작
-  if (animationId) cancelAnimationFrame(animationId);
-  requestAnimationFrame(gameLoop);
-
-  // 10. PoseEngine 시작 (웹캠 재개)
-  // poseEngine.webcam.play()는 poseEngine.init()에서 이미 불리지만,
-  // stop()에서 webcan.stop()을 했을 수 있음.
-  // poseEngine.js의 start()는 loop만 시작함.
-  // 웹캠이 멈춰있다면 다시 재생해야 함.
-  if (poseEngine.webcam) {
-    poseEngine.webcam.play();
-  }
-  poseEngine.start();
-
-  // 11. 게임 시작 (리셋 포함)
-  gameEngine.start(canvas);
-
   startBtn.disabled = true;
-  stopBtn.disabled = false;
+
+  try {
+    // 9. 루프 시작
+    if (animationId) cancelAnimationFrame(animationId);
+
+    // 10. PoseEngine 시작 (웹캠 재개)
+    // poseEngine.webcam.play()는 poseEngine.init()에서 이미 불리지만,
+    // stop()에서 webcan.stop()을 했을 수 있음.
+    // poseEngine.js의 start()는 loop만 시작함.
+    // 웹캠이 멈춰있다면 다시 재생해야 함.
+    if (poseEngine.webcam) {
+      await poseEngine.webcam.play();
+    }
+    poseEngine.start();
+
+    // 11. 게임 시작 (리셋 포함)
+    gameEngine.start(canvas);
+
+    // 루프 재등록
+    requestAnimationFrame(gameLoop);
+
+    stopBtn.disabled = false;
+  } catch (e) {
+    console.error("게임 재시작 중 오류:", e);
+    alert("게임 재시작 실패. 새로고침 해주세요.");
+    startBtn.disabled = false;
+  }
 }
 
 let animationId;
@@ -170,20 +180,25 @@ function stop() {
   const startBtn = document.getElementById("startBtn");
   const stopBtn = document.getElementById("stopBtn");
 
-  if (poseEngine) {
-    poseEngine.stop();
-  }
+  try {
+    if (poseEngine) {
+      poseEngine.stop();
+    }
 
-  if (gameEngine) {
-    gameEngine.stop(); // sets isGameActive = false
-  }
+    if (gameEngine) {
+      gameEngine.stop(); // sets isGameActive = false
+    }
 
-  if (stabilizer) {
-    stabilizer.reset();
+    if (stabilizer) {
+      stabilizer.reset();
+    }
+  } catch (e) {
+    console.warn("오류 발생 (stop):", e);
+  } finally {
+    // 버튼 상태는 무조건 변경
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
   }
-
-  startBtn.disabled = false;
-  stopBtn.disabled = true;
 }
 
 /**
