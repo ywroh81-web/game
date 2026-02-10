@@ -23,7 +23,9 @@ class GameEngine {
       hp: 3
     };
     this.missiles = [];
+    this.missiles = [];
     this.enemies = []; // 운석, UFO 등
+    this.items = []; // 아이템 (포션 등)
     this.particles = []; // 폭발 효과 등 (옵션)
 
     // 입력 상태
@@ -67,6 +69,7 @@ class GameEngine {
     this.enemies = [];
     this.missiles = [];
     this.enemies = [];
+    this.items = [];
     this.enemySpawnInterval = 1000;
 
     if (this.onScoreChange) this.onScoreChange(this.score, this.level);
@@ -137,23 +140,44 @@ class GameEngine {
       const e = this.enemies[i];
       e.y += e.speed;
 
-      // 바닥에 닿았는지 체크
+      // 바닥에 닿았는지 체크 (지나가면 데미지!)
       if (e.y > this.canvas.height) {
         this.enemies.splice(i, 1);
-        // 패널티 (점수 감점 or HP 감소 등)
-        // 규칙: 적이 바닥에 닿을 때 (옵션: 점수 감점 or HP 감소)
-        // 여기서는 점수만 깎거나 무시
+
+        // 폭탄은 지나가도 안전, 적은 지나가면 데미지
+        if (e.type !== 'bomb') {
+          this.takeDamage();
+        }
         continue;
       }
 
       // 플레이어와 충돌 체크
       if (this.checkCollision(this.player, e)) {
         this.enemies.splice(i, 1);
-        this.takeDamage();
+        this.takeDamage(); // 적이든 폭탄이든 부딪히면 아픔
       }
     }
 
-    // 4. 미사일과 적의 충돌 체크
+    // 4. 아이템 이동 및 충돌
+    for (let i = this.items.length - 1; i >= 0; i--) {
+      const item = this.items[i];
+      item.y += 3; // 천천히 떨어짐
+
+      if (item.y > this.canvas.height) {
+        this.items.splice(i, 1);
+        continue;
+      }
+
+      if (this.checkCollision(this.player, item)) {
+        // 아이템 획득
+        if (item.type === 'potion') {
+          this.heal();
+        }
+        this.items.splice(i, 1);
+      }
+    }
+
+    // 5. 미사일과 적의 충돌 체크
     for (let mIndex = this.missiles.length - 1; mIndex >= 0; mIndex--) {
       for (let eIndex = this.enemies.length - 1; eIndex >= 0; eIndex--) {
         const m = this.missiles[mIndex];
@@ -161,10 +185,23 @@ class GameEngine {
 
         // 대략적인 충돌 (거리 기반 혹은 사각형)
         if (this.checkCollision(m, e)) {
+          // 폭탄을 쏘면 데미지!
+          if (e.type === 'bomb') {
+            this.enemies.splice(eIndex, 1);
+            this.missiles.splice(mIndex, 1);
+            this.takeDamage(); // 벌칙
+            break;
+          }
+
           // 적 처치
           this.enemies.splice(eIndex, 1);
           this.missiles.splice(mIndex, 1);
           this.addScore(e.scoreValue);
+
+          // 아이템 드롭 (10%)
+          if (Math.random() < 0.1) {
+            this.spawnItem(e.x, e.y, 'potion');
+          }
           break; // 미사일 하나로 적 하나만 처리
         }
       }
@@ -247,13 +284,25 @@ class GameEngine {
         this.ctx.arc(e.x + e.width / 2, e.y + e.height / 2, e.width / 2, 0, Math.PI * 2);
         this.ctx.fill();
         this.ctx.fillText("🪨", e.x, e.y + e.height / 2);
-      } else {
+      } else if (e.type === 'ufo') {
         // UFO (타원형)
         this.ctx.beginPath();
         this.ctx.ellipse(e.x + e.width / 2, e.y + e.height / 2, e.width / 2, e.height / 3, 0, 0, Math.PI * 2);
         this.ctx.fill();
         this.ctx.fillStyle = 'white';
         this.ctx.fillText("🛸", e.x + 5, e.y + e.height / 2 + 5);
+      } else if (e.type === 'bomb') {
+        // 폭탄
+        this.ctx.font = '30px Arial';
+        this.ctx.fillText("💣", e.x, e.y + e.height - 5);
+      }
+    }
+
+    // 2-1. 아이템 그리기
+    for (const item of this.items) {
+      this.ctx.font = '30px Arial';
+      if (item.type === 'potion') {
+        this.ctx.fillText("💊", item.x, item.y + item.height);
       }
     }
 
@@ -303,7 +352,12 @@ class GameEngine {
     ];
     const laneX = lanes[Math.floor(Math.random() * lanes.length)];
 
-    const type = Math.random() > 0.8 ? 'ufo' : 'meteor'; // 20% 확률로 UFO
+    // 15% 폭탄, 15% UFO, 70% 운석
+    const rand = Math.random();
+    let type = 'meteor';
+    if (rand < 0.15) type = 'bomb';
+    else if (rand < 0.30) type = 'ufo';
+
     const width = 30; // 적 너비
 
     const enemy = {
@@ -312,12 +366,20 @@ class GameEngine {
       width: 30,
       height: 30,
       type: type,
-      speed: type === 'ufo' ? 5 + (this.level * 0.8) : 3 + (this.level * 0.5), // 속도 대폭 증가
+      speed: type === 'ufo' ? 5 + (this.level * 0.8) : (type === 'bomb' ? 4 : 3 + (this.level * 0.5)),
       color: type === 'ufo' ? 'purple' : 'gray',
       scoreValue: type === 'ufo' ? 20 : 10
     };
 
     this.enemies.push(enemy);
+  }
+
+  spawnItem(x, y, type) {
+    this.items.push({
+      x: x, y: y,
+      width: 30, height: 30,
+      type: type
+    });
   }
 
   fireMissile() {
@@ -344,11 +406,18 @@ class GameEngine {
 
   takeDamage() {
     this.player.hp--;
+    // HP 제한 없음 (사망 처리만)
     if (this.onHpChange) this.onHpChange(this.player.hp);
 
     if (this.player.hp <= 0) {
       this.stop();
     }
+  }
+
+  heal() {
+    this.player.hp++;
+    // 최대 HP 제한? (일단 제한 없이)
+    if (this.onHpChange) this.onHpChange(this.player.hp);
   }
 
   addScore(points) {
