@@ -32,7 +32,7 @@ class GameEngine {
     // 게임 루프 변수
     this.lastTime = 0;
     this.enemySpawnTimer = 0;
-    this.enemySpawnInterval = 2000; // 2초마다 적 생성 (레벨에 따라 감소)
+    this.enemySpawnInterval = 1000; // 1초마다 적 생성 (기본 난이도 상향)
 
     // 콜백
     this.onScoreChange = null;
@@ -65,7 +65,9 @@ class GameEngine {
     this.player.hp = 3;
     this.missiles = [];
     this.enemies = [];
-    this.enemySpawnInterval = 2000;
+    this.missiles = [];
+    this.enemies = [];
+    this.enemySpawnInterval = 1000;
 
     if (this.onScoreChange) this.onScoreChange(this.score, this.level);
     if (this.onHpChange) this.onHpChange(this.player.hp);
@@ -278,9 +280,17 @@ class GameEngine {
       this.ctx.font = '24px Arial';
       this.ctx.fillText(`Final Score: ${this.score}`, this.canvas.width / 2, this.canvas.height / 2 + 50);
 
+      // Ranking
+      if (window.calculatePercentile) {
+        const result = window.calculatePercentile('skyDefender', this.score);
+        this.ctx.fillStyle = '#ffcc00';
+        this.ctx.font = '20px Arial';
+        this.ctx.fillText(`Rank: ${result.tier} (Top ${100 - result.percentile}%)`, this.canvas.width / 2, this.canvas.height / 2 + 90);
+      }
+
       this.ctx.fillStyle = '#aaaaaa';
       this.ctx.font = '16px Arial';
-      this.ctx.fillText("Press Start to Retry", this.canvas.width / 2, this.canvas.height / 2 + 90);
+      this.ctx.fillText("Press Start to Retry", this.canvas.width / 2, this.canvas.height / 2 + 130);
     }
   }
 
@@ -302,7 +312,7 @@ class GameEngine {
       width: 30,
       height: 30,
       type: type,
-      speed: type === 'ufo' ? 3 + (this.level * 0.5) : 1 + (this.level * 0.2), // UFO가 더 빠름
+      speed: type === 'ufo' ? 5 + (this.level * 0.8) : 3 + (this.level * 0.5), // 속도 대폭 증가
       color: type === 'ufo' ? 'purple' : 'gray',
       scoreValue: type === 'ufo' ? 20 : 10
     };
@@ -347,7 +357,7 @@ class GameEngine {
     // 레벨업 (100점 단위)
     if (Math.floor(this.score / 100) + 1 > this.level) {
       this.level++;
-      this.enemySpawnInterval = Math.max(500, 2000 - (this.level * 200)); // 레벨업 할수록 빨라짐
+      this.enemySpawnInterval = Math.max(300, 1000 - (this.level * 100)); // 레벨업 할수록 빨라짐 (최소 0.3초)
     }
 
     if (this.onScoreChange) {

@@ -116,13 +116,23 @@ class MoveGameEngine {
             this.player.lastDirY = -1; // Default facing up
         }
 
-        // --- Slide Logic Override ---
-        this.player.isSliding = this.keys.c;
-        if (this.player.isSliding) {
-            // Slide in the last known direction with high speed
-            const slideSpeed = this.player.speed * 2.0;
-            this.player.vx = this.player.lastDirX * slideSpeed;
-            this.player.vy = this.player.lastDirY * slideSpeed;
+        // --- Slide / Crouch Logic ---
+        this.player.isCrouching = false;
+        this.player.isSliding = false;
+
+        if (this.keys.c) {
+            // If moving significantly (or WASD pressed), Slide. Else Crouch.
+            if (this.keys.w || this.keys.a || this.keys.s || this.keys.d || Math.abs(this.player.vx) > 0.1 || Math.abs(this.player.vy) > 0.1) {
+                this.player.isSliding = true;
+                // Slide in the last known direction with high speed
+                const slideSpeed = this.player.speed * 2.0;
+                this.player.vx = this.player.lastDirX * slideSpeed;
+                this.player.vy = this.player.lastDirY * slideSpeed;
+            } else {
+                this.player.isCrouching = true;
+                this.player.vx = 0;
+                this.player.vy = 0;
+            }
         } else {
             // Diagonal normalization for normal movement
             if (this.player.vx !== 0 && this.player.vy !== 0) {
@@ -144,7 +154,7 @@ class MoveGameEngine {
         // --- Actions ---
 
         // Jump Logic (Space)
-        if (this.keys.space && !this.player.isJumping) {
+        if (this.keys.space && !this.player.isJumping && !this.player.isCrouching) {
             this.player.isJumping = true;
             this.player.jumpVelocity = 10;
         }
@@ -258,9 +268,9 @@ class MoveGameEngine {
             }
             this.ctx.rotate(angle);
 
-            // Calculate Visual Height for Sliding
+            // Calculate Visual Height for Sliding/Crouching
             let scaleY = 1;
-            if (this.player.isSliding) scaleY = 0.5;
+            if (this.player.isSliding || this.player.isCrouching) scaleY = 0.5;
 
             this.ctx.scale(1, scaleY);
 
@@ -297,11 +307,21 @@ class MoveGameEngine {
             this.ctx.restore();
 
             // Bullets
-            this.ctx.fillStyle = 'red';
             for (const b of this.bullets) {
+                this.ctx.fillStyle = b.color || 'red';
                 this.ctx.beginPath();
-                this.ctx.arc(b.x + b.width / 2, b.y + b.height / 2, b.width / 2, 0, Math.PI * 2);
+                // b.radius is dynamic now
+                const r = b.radius || b.width / 2;
+                this.ctx.arc(b.x + r, b.y + r, r, 0, Math.PI * 2);
                 this.ctx.fill();
+
+                // Shadow for High Bullets (to indicate height)
+                if (b.isHigh) {
+                    this.ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                    this.ctx.beginPath();
+                    this.ctx.arc(b.x + r, b.y + r + 15, r * 0.8, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
             }
         } else {
             // Game Over
@@ -316,6 +336,14 @@ class MoveGameEngine {
             this.ctx.fillStyle = 'white';
             this.ctx.font = '24px Arial';
             this.ctx.fillText(`Survived: ${this.survivalTime}s`, this.canvas.width / 2, this.canvas.height / 2 + 40);
+
+            // Ranking
+            if (window.calculatePercentile) {
+                const result = window.calculatePercentile('movementTrainer', this.survivalTime);
+                this.ctx.fillStyle = '#ffcc00';
+                this.ctx.font = '24px Arial';
+                this.ctx.fillText(`Rank: ${result.tier} (Top ${100 - result.percentile}%)`, this.canvas.width / 2, this.canvas.height / 2 + 80);
+            }
         }
     }
 
@@ -361,6 +389,18 @@ class MoveGameEngine {
         } else {
             bullet.vx = bullet.speed;
             bullet.vy = 0;
+        }
+
+        // High Bullet Logic (30% chance)
+        // High bullets can be ducked under (Crouch/Slide)
+        if (Math.random() < 0.3) {
+            bullet.isHigh = true;
+            bullet.color = '#ffff00'; // Yellow
+            bullet.radius = 8; // Slightly smaller
+        } else {
+            bullet.isHigh = false;
+            bullet.color = 'red';
+            bullet.radius = 5;
         }
 
         this.bullets.push(bullet);

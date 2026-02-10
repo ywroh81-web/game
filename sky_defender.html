@@ -28,6 +28,12 @@
     <button type="button" id="stopBtn" onclick="stop()" disabled>Stop</button>
   </div>
 
+  <div style="margin-top: 20px; text-align: center;">
+    <a href="index.html" class="btn"
+      style="text-decoration: none; display: inline-block; padding: 10px 20px; background: #333; color: white; border-radius: 5px;">←
+      Back to Menu</a>
+  </div>
+
   <div id="label-container"></div>
 
   <!-- Teachable Machine 라이브러리 -->
@@ -35,6 +41,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
 
   <!-- 애플리케이션 모듈 -->
+  <script src="./js/rankingData.js"></script>
   <script src="./js/stabilizer.js"></script>
   <script src="./js/poseEngine.js"></script>
   <script src="./js/gameEngine.js"></script>

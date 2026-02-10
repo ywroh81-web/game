@@ -100,6 +100,14 @@ class AimGameEngine {
             this.ctx.fillStyle = 'white';
             this.ctx.font = '24px Arial';
             this.ctx.fillText(`Final Score: ${this.score}`, this.canvas.width / 2, this.canvas.height / 2 + 40);
+
+            // Ranking
+            if (window.calculatePercentile) {
+                const result = window.calculatePercentile('aimTrainer', this.score);
+                this.ctx.fillStyle = '#ffcc00'; // Gold color
+                this.ctx.font = '20px Arial';
+                this.ctx.fillText(`Rank: ${result.tier} (Top ${100 - result.percentile}%)`, this.canvas.width / 2, this.canvas.height / 2 + 80);
+            }
         }
     }
 
