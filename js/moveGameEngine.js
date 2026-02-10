@@ -103,10 +103,32 @@ class MoveGameEngine {
         if (this.keys.w) this.player.vy = -currentSpeed;
         if (this.keys.s) this.player.vy = currentSpeed;
 
-        // Diagonal normalization
-        if (this.player.vx !== 0 && this.player.vy !== 0) {
-            this.player.vx *= 0.707;
-            this.player.vy *= 0.707;
+        // Diagonal normalization - Keep track of last direction for sliding
+        if (this.player.vx !== 0 || this.player.vy !== 0) {
+            // Normalize current input for direction tracking
+            const mag = Math.sqrt(this.player.vx * this.player.vx + this.player.vy * this.player.vy);
+            if (mag > 0) {
+                this.player.lastDirX = this.player.vx / mag;
+                this.player.lastDirY = this.player.vy / mag;
+            }
+        } else if (!this.player.lastDirX) {
+            this.player.lastDirX = 0;
+            this.player.lastDirY = -1; // Default facing up
+        }
+
+        // --- Slide Logic Override ---
+        this.player.isSliding = this.keys.c;
+        if (this.player.isSliding) {
+            // Slide in the last known direction with high speed
+            const slideSpeed = this.player.speed * 2.0;
+            this.player.vx = this.player.lastDirX * slideSpeed;
+            this.player.vy = this.player.lastDirY * slideSpeed;
+        } else {
+            // Diagonal normalization for normal movement
+            if (this.player.vx !== 0 && this.player.vy !== 0) {
+                this.player.vx *= 0.707;
+                this.player.vy *= 0.707;
+            }
         }
 
         // Apply Position
@@ -221,21 +243,58 @@ class MoveGameEngine {
                 this.ctx.fill();
             }
 
-            // Player
-            this.ctx.fillStyle = this.player.color;
-            if (this.player.isSliding) this.ctx.fillStyle = '#00ffaa'; // Slide color
-            if (this.player.isJumping) this.ctx.fillStyle = '#ffff00'; // Jump color (Invincible)
-
-
-            // Jump visual: Scale + Y offset
+            // Player Visual (Ninja Style)
             const visualY = this.player.y - this.player.jumpHeight;
-            let visualH = this.player.height;
-            if (this.player.isSliding) visualH = this.player.height / 2;
+            const cx = this.player.x + this.player.width / 2;
+            const cy = visualY + this.player.height / 2;
 
-            // Slide visual: Lower height
-            const drawY = this.player.isSliding ? this.player.y + this.player.height / 2 : visualY;
+            this.ctx.save();
+            this.ctx.translate(cx, cy);
 
-            this.ctx.fillRect(this.player.x, drawY, this.player.width, visualH);
+            // Rotate towards movement direction
+            let angle = 0;
+            if (this.player.lastDirX !== 0 || this.player.lastDirY !== 0) {
+                angle = Math.atan2(this.player.lastDirY, this.player.lastDirX);
+            }
+            this.ctx.rotate(angle);
+
+            // Calculate Visual Height for Sliding
+            let scaleY = 1;
+            if (this.player.isSliding) scaleY = 0.5;
+
+            this.ctx.scale(1, scaleY);
+
+            // Body (Triangle/Arrow)
+            this.ctx.fillStyle = this.player.color;
+            if (this.player.isJumping) this.ctx.fillStyle = '#ffff00';
+
+            this.ctx.beginPath();
+            this.ctx.moveTo(15, 0); // Front tip
+            this.ctx.lineTo(-10, 10); // Back Left
+            this.ctx.lineTo(-5, 0);   // Back Center (indent)
+            this.ctx.lineTo(-10, -10);// Back Right
+            this.ctx.closePath();
+            this.ctx.fill();
+
+            // Cockpit / Head
+            this.ctx.fillStyle = 'white';
+            this.ctx.beginPath();
+            this.ctx.arc(5, 0, 5, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            // Trail (if sliding)
+            if (this.player.isSliding) {
+                this.ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)';
+                this.ctx.lineWidth = 2;
+                this.ctx.beginPath();
+                this.ctx.moveTo(-10, 5);
+                this.ctx.lineTo(-30, 10);
+                this.ctx.moveTo(-10, -5);
+                this.ctx.lineTo(-30, -10);
+                this.ctx.stroke();
+            }
+
+            this.ctx.restore();
 
             // Bullets
             this.ctx.fillStyle = 'red';
@@ -291,10 +350,24 @@ class MoveGameEngine {
                 break;
         }
 
-        // Aim at player roughly?
-        // Let's keep straight lines for now, easier to dodge pattern.
+        // Aim at player
+        const dx = (this.player.x + this.player.width / 2) - bullet.x;
+        const dy = (this.player.y + this.player.height / 2) - bullet.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist > 0) {
+            bullet.vx = (dx / dist) * bullet.speed;
+            bullet.vy = (dy / dist) * bullet.speed;
+        } else {
+            bullet.vx = bullet.speed;
+            bullet.vy = 0;
+        }
 
         this.bullets.push(bullet);
+    }
+
+    updateUI() {
+        if (this.onTimeUpdate) this.onTimeUpdate(this.survivalTime.toFixed(2));
     }
 
     // Input Handling

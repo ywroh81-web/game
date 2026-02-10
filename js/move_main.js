@@ -63,7 +63,7 @@ function startGame() {
         if (animationId) cancelAnimationFrame(animationId);
         requestAnimationFrame(gameLoop);
 
-        canvas.focus();
+        // canvas.focus(); // 오류 가능성 있어 주석 처리 (window 이벤트리스너 사용하므로 필수 아님)
     } catch (e) {
         console.error("Start Game Error:", e);
         alert("게임 시작 중 오류가 발생했습니다: " + e.message);
