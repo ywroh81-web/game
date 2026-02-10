@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aim Trainer - Trinity Arcade</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        /* Specific overrides for Aim Trainer */
+        #game-description {
+            margin-bottom: 20px;
+            font-size: 1.2rem;
+            color: #ccc;
+        }
+
+        #hud {
+            display: flex;
+            justify-content: space-between;
+            width: 600px;
+            margin-bottom: 10px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #00d2ff;
+        }
+
+        .hud-item {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: 1px solid #333;
+        }
+
+        #aim-canvas {
+            cursor: crosshair;
+            /* 기본 십자선 커서 */
+            /* 만약 더 멋진 이미지를 원하면 아래 주석 해제 후 url 변경 */
+            /* cursor: url('aim_icon.png') 16 16, crosshair; */
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="game-wrapper">
+        <h1 class="game-title">🎯 Aim Trainer</h1>
+        <p id="game-description">
+            60초 동안 나타나는 과녁을 빠르게 클릭하세요!<br>
+            정확도와 속도를 테스트해 보세요.
+        </p>
+
+        <div id="hud">
+            <div class="hud-item" id="score-board">Score: 0</div>
+            <div class="hud-item" id="time-board">Time: 60</div>
+        </div>
+
+        <div class="canvas-container">
+            <canvas id="aim-canvas"></canvas>
+
+            <!-- Start/Stop Controls -->
+            <div class="controls">
+                <button id="startBtn" onclick="startGame()">Start Game</button>
+                <button id="stopBtn" onclick="stopGame()" disabled>Stop</button>
+            </div>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <a href="index.html" class="btn"
+                style="text-decoration: none; display: inline-block; padding: 10px 20px; background: #333; color: white; border-radius: 5px;">←
+                Back to Menu</a>
+        </div>
+    </div>
+
+    <!-- Game Scripts -->
+    <script src="js/aimGameEngine.js"></script>
+    <script src="js/aim_main.js"></script>
+
+</body>
+
+</html>

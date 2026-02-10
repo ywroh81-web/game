@@ -111,14 +111,9 @@ async function startGame() {
     // 9. 루프 시작
     if (animationId) cancelAnimationFrame(animationId);
 
-    // 10. PoseEngine 시작 (웹캠 재개)
-    // poseEngine.webcam.play()는 poseEngine.init()에서 이미 불리지만,
-    // stop()에서 webcan.stop()을 했을 수 있음.
-    // poseEngine.js의 start()는 loop만 시작함.
-    // 웹캠이 멈춰있다면 다시 재생해야 함.
-    if (poseEngine.webcam) {
-      await poseEngine.webcam.play();
-    }
+    // 10. PoseEngine 시작
+    // poseEngine.js에서 stop() 시 웹캠을 끄지 않도록 변경했으므로,
+    // 여기서는 다시 setup/play 할 필요 없이 prediction loop만 시작하면 됨.
     poseEngine.start();
 
     // 11. 게임 시작 (리셋 포함)

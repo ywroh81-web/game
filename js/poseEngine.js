@@ -62,7 +62,7 @@ class PoseEngine {
     }
 
     if (this.webcam) {
-      this.webcam.stop();
+      // this.webcam.stop(); // 웹캠 스트림은 끄지 않고 유지 (재시작 시 딜레이/오류 방지)
     }
   }
 
@@ -72,8 +72,16 @@ class PoseEngine {
   async loop() {
     if (!this.isRunning) return;
 
-    this.webcam.update(); // 웹캠 프레임 업데이트
-    await this.predict();
+    try {
+      if (this.webcam && this.webcam.canvas) {
+        this.webcam.update(); // 웹캠 프레임 업데이트
+      }
+      await this.predict();
+    } catch (e) {
+      // 프레임 업데이트 실패 시 무시 (웹캠 로딩 중 등)
+      // console.warn("Pose loop warning:", e);
+    }
+
     this.animationId = window.requestAnimationFrame(() => this.loop());
   }
 
