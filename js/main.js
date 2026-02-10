@@ -16,95 +16,113 @@ let canvas;
 /**
  * 애플리케이션 초기화
  */
+// 초기화 여부 플래그
+let isInitialized = false;
+
+/**
+ * 애플리케이션 초기화 (최초 1회 실행)
+ */
 async function init() {
   const startBtn = document.getElementById("startBtn");
-  const stopBtn = document.getElementById("stopBtn");
-
   startBtn.disabled = true;
 
   try {
-    // 1. PoseEngine 초기화
-    poseEngine = new PoseEngine("./my_model/");
-    const { maxPredictions, webcam } = await poseEngine.init({
-      size: 200,
-      flip: true
-    });
+    if (!isInitialized) {
+      // 1. PoseEngine 초기화 (모델 로드 및 웹캠 설정)
+      poseEngine = new PoseEngine("./my_model/");
+      const { maxPredictions } = await poseEngine.init({
+        size: 200,
+        flip: true
+      });
 
-    // 2. Stabilizer 초기화
-    stabilizer = new PredictionStabilizer({
-      threshold: 0.7,
-      smoothingFrames: 3
-    });
+      // 2. Stabilizer 초기화
+      stabilizer = new PredictionStabilizer({
+        threshold: 0.7,
+        smoothingFrames: 3
+      });
 
-    // 3. GameEngine 초기화
-    gameEngine = new GameEngine();
+      // 3. GameEngine 초기화
+      gameEngine = new GameEngine();
 
-    // 4. 캔버스 설정
-    canvas = document.getElementById("canvas");
-    // 캔버스 크기를 좀 더 크게 설정 (게임 플레이 용이성)
-    canvas.width = 600;
-    canvas.height = 400;
-    ctx = canvas.getContext("2d");
+      // 4. 캔버스 설정
+      canvas = document.getElementById("canvas");
+      canvas.width = 600;
+      canvas.height = 400;
+      ctx = canvas.getContext("2d");
 
-    // 5. Label Container 설정
-    labelContainer = document.getElementById("label-container");
-    labelContainer.innerHTML = ""; // 초기화
-    for (let i = 0; i < maxPredictions; i++) {
-      labelContainer.appendChild(document.createElement("div"));
+      // 5. Label Container 설정
+      labelContainer = document.getElementById("label-container");
+      labelContainer.innerHTML = "";
+      for (let i = 0; i < maxPredictions; i++) {
+        labelContainer.appendChild(document.createElement("div"));
+      }
+
+      // 6. PoseEngine 콜백 설정
+      poseEngine.setPredictionCallback(handlePrediction);
+
+      // 7. 게임 콜백 설정
+      gameEngine.setScoreChangeCallback((score, level) => {
+        const scoreBoard = document.getElementById("score-board");
+        if (scoreBoard) {
+          scoreBoard.innerText = `Score: ${score} / Level: ${level}`;
+        }
+      });
+
+      gameEngine.setHpChangeCallback((hp) => {
+        const hpBoard = document.getElementById("hp-board");
+        if (hpBoard) {
+          let hearts = "";
+          for (let i = 0; i < hp; i++) hearts += "❤️";
+          hpBoard.innerText = `HP: ${hearts}`;
+        }
+      });
+
+      gameEngine.setGameEndCallback((score, level) => {
+        stop();
+      });
+
+      // 8. 마우스 클릭 이벤트 (미사일 발사) - 한 번만 등록
+      canvas.addEventListener('mousedown', (e) => {
+        if (gameEngine && gameEngine.isGameActive) {
+          gameEngine.fireMissile(); // 인자 불필요 (정면 발사)
+        }
+      });
+
+      isInitialized = true;
     }
 
-    // 6. PoseEngine 콜백 설정
-    poseEngine.setPredictionCallback(handlePrediction);
+    startGame();
 
-    // 7. 게임 콜백 설정
-    gameEngine.setScoreChangeCallback((score, level) => {
-      const scoreBoard = document.getElementById("score-board");
-      if (scoreBoard) {
-        scoreBoard.innerText = `Score: ${score} / Level: ${level}`;
-      }
-    });
-
-    gameEngine.setHpChangeCallback((hp) => {
-      const hpBoard = document.getElementById("hp-board");
-      if (hpBoard) {
-        let hearts = "";
-        for (let i = 0; i < hp; i++) hearts += "❤️";
-        hpBoard.innerText = `HP: ${hearts}`;
-      }
-    });
-
-    gameEngine.setGameEndCallback((score, level) => {
-      // alert 제거: 캔버스에 Game Over 텍스트가 그려지도록 함
-      stop();
-    });
-
-    // 8. 마우스 클릭 이벤트 (미사일 발사)
-    canvas.addEventListener('mousedown', (e) => {
-      if (gameEngine && gameEngine.isGameActive) {
-        const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        gameEngine.fireMissile(x, y);
-      }
-    });
-
-    // 9. 루프 시작
-    // 이전 루프 취소 (중복 실행 방지)
-    if (animationId) cancelAnimationFrame(animationId);
-    requestAnimationFrame(gameLoop);
-
-    // 10. PoseEngine 시작
-    poseEngine.start();
-
-    // 11. 게임 시작
-    gameEngine.start(canvas);
-
-    stopBtn.disabled = false;
   } catch (error) {
     console.error("초기화 중 오류 발생:", error);
     alert("초기화에 실패했습니다. 콘솔을 확인하세요.");
     startBtn.disabled = false;
   }
+}
+
+function startGame() {
+  const startBtn = document.getElementById("startBtn");
+  const stopBtn = document.getElementById("stopBtn");
+
+  // 9. 루프 시작
+  if (animationId) cancelAnimationFrame(animationId);
+  requestAnimationFrame(gameLoop);
+
+  // 10. PoseEngine 시작 (웹캠 재개)
+  // poseEngine.webcam.play()는 poseEngine.init()에서 이미 불리지만,
+  // stop()에서 webcan.stop()을 했을 수 있음.
+  // poseEngine.js의 start()는 loop만 시작함.
+  // 웹캠이 멈춰있다면 다시 재생해야 함.
+  if (poseEngine.webcam) {
+    poseEngine.webcam.play();
+  }
+  poseEngine.start();
+
+  // 11. 게임 시작 (리셋 포함)
+  gameEngine.start(canvas);
+
+  startBtn.disabled = true;
+  stopBtn.disabled = false;
 }
 
 let animationId;
