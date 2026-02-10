@@ -5,32 +5,35 @@
 
 const RANKING_DATA = {
     // 1. SKY DEFENDER (Score)
+    // Adjusted: Top tier 1200 (was 2000)
     skyDefender: [
         { score: 0, percentile: 10, tier: "Cadet" },
-        { score: 50, percentile: 30, tier: "Private" },
-        { score: 100, percentile: 50, tier: "Sergeant" },
-        { score: 200, percentile: 75, tier: "Lieutenant" },
-        { score: 400, percentile: 90, tier: "Captain" },
-        { score: 800, percentile: 99, tier: "Sky Marshal" }
+        { score: 80, percentile: 30, tier: "Private" },
+        { score: 200, percentile: 50, tier: "Sergeant" },
+        { score: 400, percentile: 75, tier: "Lieutenant" },
+        { score: 800, percentile: 90, tier: "Captain" },
+        { score: 1200, percentile: 99, tier: "Sky Marshal" }
     ],
 
     // 2. AIM TRAINER (Score)
+    // Adjusted: Top tier 85 (was 100)
     aimTrainer: [
-        { score: 5, percentile: 10, tier: "Rusty" },
-        { score: 15, percentile: 40, tier: "Average" },
-        { score: 25, percentile: 60, tier: "Sharp" },
-        { score: 35, percentile: 80, tier: "Sniper" },
-        { score: 45, percentile: 95, tier: "Aimbot" },
-        { score: 60, percentile: 99.9, tier: "Human Benzmark" }
+        { score: 10, percentile: 10, tier: "Rusty" },
+        { score: 25, percentile: 40, tier: "Average" },
+        { score: 40, percentile: 60, tier: "Sharp" },
+        { score: 55, percentile: 80, tier: "Sniper" },
+        { score: 70, percentile: 95, tier: "Aimbot" },
+        { score: 85, percentile: 99.9, tier: "Human Benzmark" }
     ],
 
     // 3. MOVEMENT TRAINER (Survival Time in Seconds)
+    // Adjusted: Top tier 120s (2 mins) as requested
     movementTrainer: [
         { score: 10, percentile: 20, tier: "Walking Target" },
         { score: 30, percentile: 50, tier: "Survivor" },
         { score: 60, percentile: 75, tier: "Dodger" },
-        { score: 120, percentile: 90, tier: "Ninja" },
-        { score: 300, percentile: 99, tier: "Untouchable" }
+        { score: 90, percentile: 90, tier: "Ninja" },
+        { score: 120, percentile: 99, tier: "Untouchable" }
     ]
 };
 
