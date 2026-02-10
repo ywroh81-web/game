@@ -1,118 +1,290 @@
 /**
  * gameEngine.js
- * 게임 단계, 명령, 점수, 제한시간 등 게임 규칙 전체를 담당
- *
- * 포즈 인식을 활용한 게임 로직을 관리하는 엔진
- * (현재는 기본 템플릿이므로 향후 게임 로직 추가 가능)
+ * Sky Defender 게임 엔진
+ * 포즈 인식으로 전투기를 이동하고, 마우스로 미사일을 발사하는 게임 로직을 담당
  */
 
 class GameEngine {
   constructor() {
-    this.score = 0;
-    this.level = 1;
-    this.timeLimit = 0;
-    this.currentCommand = null;
+    this.canvas = null;
+    this.ctx = null;
     this.isGameActive = false;
-    this.gameTimer = null;
-    this.onCommandChange = null; // 명령 변경 콜백
-    this.onScoreChange = null; // 점수 변경 콜백
-    this.onGameEnd = null; // 게임 종료 콜백
-  }
-
-  /**
-   * 게임 시작
-   * @param {Object} config - 게임 설정 { timeLimit, commands }
-   */
-  start(config = {}) {
-    this.isGameActive = true;
     this.score = 0;
     this.level = 1;
-    this.timeLimit = config.timeLimit || 60; // 기본 60초
-    this.commands = config.commands || []; // 게임 명령어 배열
 
-    if (this.timeLimit > 0) {
-      this.startTimer();
-    }
+    // 게임 엔티티
+    this.player = {
+      x: 0,
+      y: 0,
+      width: 40,
+      height: 40,
+      color: 'blue',
+      speed: 5,
+      hp: 3
+    };
+    this.missiles = [];
+    this.enemies = []; // 운석, UFO 등
+    this.particles = []; // 폭발 효과 등 (옵션)
 
-    // 첫 번째 명령 발급 (게임 모드일 경우)
-    if (this.commands.length > 0) {
-      this.issueNewCommand();
-    }
+    // 입력 상태
+    this.currentPose = "Center"; // Center, Left, Right
+
+    // 게임 루프 변수
+    this.lastTime = 0;
+    this.enemySpawnTimer = 0;
+    this.enemySpawnInterval = 2000; // 2초마다 적 생성 (레벨에 따라 감소)
+
+    // 콜백
+    this.onScoreChange = null;
+    this.onGameEnd = null;
+    this.onHpChange = null;
   }
 
   /**
-   * 게임 중지
+   * 게임 초기화 및 시작
+   * @param {HTMLCanvasElement} canvas - 게임을 그릴 캔버스
    */
+  start(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    
+    this.resetGame();
+    this.isGameActive = true;
+    this.lastTime = performance.now();
+    
+    // 플레이어 초기 위치 (화면 하단 중앙)
+    this.player.x = this.canvas.width / 2 - this.player.width / 2;
+    this.player.y = this.canvas.height - this.player.height - 20;
+
+    // 게임 루프 시작은 main.js에서 requestAnimationFrame으로 호출됨
+  }
+
+  resetGame() {
+    this.score = 0;
+    this.level = 1;
+    this.player.hp = 3;
+    this.missiles = [];
+    this.enemies = [];
+    this.enemySpawnInterval = 2000;
+    
+    if (this.onScoreChange) this.onScoreChange(this.score, this.level);
+    if (this.onHpChange) this.onHpChange(this.player.hp);
+  }
+
   stop() {
     this.isGameActive = false;
-    this.clearTimer();
-
     if (this.onGameEnd) {
       this.onGameEnd(this.score, this.level);
     }
   }
 
   /**
-   * 타이머 시작
+   * 게임 상태 업데이트 (Main Loop)
+   * @param {number} timestamp - 현재 시간
    */
-  startTimer() {
-    this.gameTimer = setInterval(() => {
-      this.timeLimit--;
-
-      if (this.timeLimit <= 0) {
-        this.stop();
-      }
-    }, 1000);
-  }
-
-  /**
-   * 타이머 정리
-   */
-  clearTimer() {
-    if (this.gameTimer) {
-      clearInterval(this.gameTimer);
-      this.gameTimer = null;
-    }
-  }
-
-  /**
-   * 새로운 명령 발급
-   */
-  issueNewCommand() {
-    if (this.commands.length === 0) return;
-
-    const randomIndex = Math.floor(Math.random() * this.commands.length);
-    this.currentCommand = this.commands[randomIndex];
-
-    if (this.onCommandChange) {
-      this.onCommandChange(this.currentCommand);
-    }
-  }
-
-  /**
-   * 포즈 인식 결과 처리
-   * @param {string} detectedPose - 인식된 포즈 이름
-   */
-  onPoseDetected(detectedPose) {
+  update(timestamp) {
     if (!this.isGameActive) return;
 
-    // 현재 명령과 일치하는지 확인
-    if (this.currentCommand && detectedPose === this.currentCommand) {
-      this.addScore(10); // 점수 추가
-      this.issueNewCommand(); // 새로운 명령 발급
+    const deltaTime = timestamp - this.lastTime;
+    this.lastTime = timestamp;
+
+    // 1. 플레이어 이동 처리 (Pose 기반)
+    if (this.currentPose === "Left") {
+      this.player.x -= this.player.speed;
+    } else if (this.currentPose === "Right") {
+      this.player.x += this.player.speed;
+    }
+
+    // 화면 밖으로 나가지 않도록 제한
+    if (this.player.x < 0) this.player.x = 0;
+    if (this.player.x + this.player.width > this.canvas.width) {
+      this.player.x = this.canvas.width - this.player.width;
+    }
+
+    // 2. 미사일 이동
+    for (let i = this.missiles.length - 1; i >= 0; i--) {
+      const m = this.missiles[i];
+      // 타겟 위치로 이동 (유도탄 방식 또는 직선 이동)
+      // 여기서는 클릭한 지점(rx, ry)을 향해 날아가게 하거나, 단순히 위로 날아가게 할 수 있음
+      // 규칙상 "마우스 클릭 위치로 미사일이 날아가도록" 하라고 되어 있음.
+      
+      const dx = m.targetX - m.x;
+      const dy = m.targetY - m.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      
+      if (dist < m.speed) {
+        // 목표 도달 (또는 근처) -> 폭발 혹은 소멸
+        this.missiles.splice(i, 1);
+        continue;
+      }
+
+      const vx = (dx / dist) * m.speed;
+      const vy = (dy / dist) * m.speed;
+
+      m.x += vx;
+      m.y += vy;
+
+      // 화면 밖 체크 (혹시 모르니)
+      if (m.y < 0 || m.x < 0 || m.x > this.canvas.width || m.y > this.canvas.height) {
+         this.missiles.splice(i, 1);
+      }
+    }
+
+    // 3. 적 생성 및 이동
+    this.enemySpawnTimer += deltaTime;
+    if (this.enemySpawnTimer > this.enemySpawnInterval) {
+      this.spawnEnemy();
+      this.enemySpawnTimer = 0;
+    }
+
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const e = this.enemies[i];
+      e.y += e.speed;
+
+      // 바닥에 닿았는지 체크
+      if (e.y > this.canvas.height) {
+        this.enemies.splice(i, 1);
+        // 패널티 (점수 감점 or HP 감소 등)
+        // 규칙: 적이 바닥에 닿을 때 (옵션: 점수 감점 or HP 감소)
+        // 여기서는 점수만 깎거나 무시
+        continue;
+      }
+
+      // 플레이어와 충돌 체크
+      if (this.checkCollision(this.player, e)) {
+        this.enemies.splice(i, 1);
+        this.takeDamage();
+      }
+    }
+
+    // 4. 미사일과 적의 충돌 체크
+    for (let mIndex = this.missiles.length - 1; mIndex >= 0; mIndex--) {
+      for (let eIndex = this.enemies.length - 1; eIndex >= 0; eIndex--) {
+        const m = this.missiles[mIndex];
+        const e = this.enemies[eIndex];
+
+        // 대략적인 충돌 (거리 기반 혹은 사각형)
+        if (this.checkCollision(m, e)) {
+          // 적 처치
+          this.enemies.splice(eIndex, 1);
+          this.missiles.splice(mIndex, 1);
+          this.addScore(e.scoreValue);
+          break; // 미사일 하나로 적 하나만 처리
+        }
+      }
     }
   }
 
   /**
-   * 점수 추가
-   * @param {number} points - 추가할 점수
+   * 화면 그리기 (Render Loop)
    */
+  draw() {
+    if (!this.ctx) return;
+    
+    // 배경 지우기
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // 1. 플레이어 그리기 (삼각형 모양)
+    this.ctx.fillStyle = this.player.color;
+    this.ctx.beginPath();
+    this.ctx.moveTo(this.player.x + this.player.width / 2, this.player.y);
+    this.ctx.lineTo(this.player.x + this.player.width, this.player.y + this.player.height);
+    this.ctx.lineTo(this.player.x, this.player.y + this.player.height);
+    this.ctx.fill();
+
+    // 2. 적 그리기
+    for (const e of this.enemies) {
+      this.ctx.fillStyle = e.color;
+      if (e.type === 'meteor') {
+        // 운석 (원형)
+        this.ctx.beginPath();
+        this.ctx.arc(e.x + e.width/2, e.y + e.height/2, e.width/2, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.fillText("🪨", e.x, e.y + e.height/2);
+      } else {
+        // UFO (타원형)
+        this.ctx.beginPath();
+        this.ctx.ellipse(e.x + e.width/2, e.y + e.height/2, e.width/2, e.height/3, 0, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.fillStyle = 'white';
+        this.ctx.fillText("🛸", e.x + 5, e.y + e.height/2 + 5);
+      }
+    }
+
+    // 3. 미사일 그리기
+    this.ctx.fillStyle = 'red';
+    for (const m of this.missiles) {
+      this.ctx.beginPath();
+      this.ctx.arc(m.x, m.y, 4, 0, Math.PI*2);
+      this.ctx.fill();
+    }
+    
+    // 4. 게임 오버 텍스트 (게임이 끝났지만 루프가 돌 수 있음, stop 호출 전)
+    if (!this.isGameActive) {
+      this.ctx.fillStyle = 'white';
+      this.ctx.font = '30px Arial';
+      this.ctx.fillText("GAME OVER", this.canvas.width/2 - 80, this.canvas.height/2);
+    }
+  }
+
+  spawnEnemy() {
+    const x = Math.random() * (this.canvas.width - 30);
+    const type = Math.random() > 0.8 ? 'ufo' : 'meteor'; // 20% 확률로 UFO
+    
+    const enemy = {
+      x: x,
+      y: -30,
+      width: 30,
+      height: 30,
+      type: type,
+      speed: type === 'ufo' ? 3 + (this.level * 0.5) : 1 + (this.level * 0.2), // UFO가 더 빠름
+      color: type === 'ufo' ? 'purple' : 'gray',
+      scoreValue: type === 'ufo' ? 20 : 10
+    };
+    
+    this.enemies.push(enemy);
+  }
+
+  fireMissile(targetX, targetY) {
+    if (!this.isGameActive) return;
+    
+    // 플레이어 위치에서 발사
+    this.missiles.push({
+      x: this.player.x + this.player.width / 2,
+      y: this.player.y,
+      targetX: targetX,
+      targetY: targetY,
+      speed: 8,
+      width: 5,
+      height: 5
+    });
+  }
+
+  checkCollision(rect1, rect2) {
+    return (
+      rect1.x < rect2.x + rect2.width &&
+      rect1.x + rect1.width > rect2.x &&
+      rect1.y < rect2.y + rect2.height &&
+      rect1.height + rect1.y > rect2.y
+    );
+  }
+
+  takeDamage() {
+    this.player.hp--;
+    if (this.onHpChange) this.onHpChange(this.player.hp);
+
+    if (this.player.hp <= 0) {
+      this.stop();
+    }
+  }
+
   addScore(points) {
     this.score += points;
-
-    // 레벨업 로직 (예: 100점마다)
-    if (this.score >= this.level * 100) {
+    
+    // 레벨업 (100점 단위)
+    if (Math.floor(this.score / 100) + 1 > this.level) {
       this.level++;
+      this.enemySpawnInterval = Math.max(500, 2000 - (this.level * 200)); // 레벨업 할수록 빨라짐
     }
 
     if (this.onScoreChange) {
@@ -120,43 +292,24 @@ class GameEngine {
     }
   }
 
-  /**
-   * 명령 변경 콜백 등록
-   * @param {Function} callback - (command) => void
-   */
-  setCommandChangeCallback(callback) {
-    this.onCommandChange = callback;
+  // --- 외부 입력 핸들러 ---
+  
+  onPoseDetected(poseName) {
+    // "Left", "Right", "Center" 등
+    this.currentPose = poseName;
   }
 
-  /**
-   * 점수 변경 콜백 등록
-   * @param {Function} callback - (score, level) => void
-   */
   setScoreChangeCallback(callback) {
     this.onScoreChange = callback;
   }
+  
+  setHpChangeCallback(callback) {
+    this.onHpChange = callback;
+  }
 
-  /**
-   * 게임 종료 콜백 등록
-   * @param {Function} callback - (finalScore, finalLevel) => void
-   */
   setGameEndCallback(callback) {
     this.onGameEnd = callback;
   }
-
-  /**
-   * 현재 게임 상태 반환
-   */
-  getGameState() {
-    return {
-      isActive: this.isGameActive,
-      score: this.score,
-      level: this.level,
-      timeRemaining: this.timeLimit,
-      currentCommand: this.currentCommand
-    };
-  }
 }
 
-// 전역으로 내보내기
 window.GameEngine = GameEngine;
